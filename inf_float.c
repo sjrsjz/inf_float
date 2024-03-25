@@ -42,7 +42,7 @@ inf_float* multiply(inf_float *, inf_float *);
 inf_float* multiply_int(inf_float *, unsigned int);
 inf_float* divide(inf_float *, inf_float *, size_t);
 inf_float* arcsin(inf_float *, size_t);
-inf_float* PI(size_t);
+inf_float *PI(size_t, size_t, size_t);
 inf_float* cubic_root(inf_float *, size_t, size_t);
 inf_float* sqr_root(inf_float *, size_t, size_t);
 
@@ -734,9 +734,220 @@ void FloatToString(inf_float *a, char* buf){
     buf[offset] = '\0';
 }
 
+inf_float* pow2(inf_float*a){
+    return multiply(a, a);
+}
+inf_float* pow3(inf_float*a){
+    inf_float *temp = multiply(a, a);
+    inf_float *ret = multiply(temp, a);
+    destroy(temp);
+    return ret;
+}
+inf_float* multiply_single(inf_float*a,int num){
+    inf_float *num_1 = (inf_float *)malloc(sizeof(inf_float));
+    init(num_1);
+    append(num_1, num < 0 ? -num : num);
+    num_1->exp = 9;
+    num_1->sign = num < 0 ? -1 : 1;
+    inf_float *ret = multiply(a, num_1);
+    destroy(num_1);
+    return ret;
+}
+inf_float *add_single(inf_float *a, int num)
+{
+    inf_float *num_1 = (inf_float *)malloc(sizeof(inf_float));
+    init(num_1);
+    append(num_1, num < 0 ? -num : num);
+    num_1->exp = 9;
+    num_1->sign = num < 0 ? -1 : 1;
+    inf_float *ret = add(a, num_1);
+    destroy(num_1);
+    return ret;
+}
 
-inf_float* PI(size_t precise){
+inf_float *substract_single_1(inf_float *a, int num)
+{
+    inf_float *num_1 = (inf_float *)malloc(sizeof(inf_float));
+    init(num_1);
+    append(num_1, num < 0 ? -num : num);
+    num_1->exp = 9;
+    num_1->sign = num < 0 ? -1 : 1;
+    inf_float *ret = substract(num_1, a);
+    destroy(num_1);
+    return ret;
+}
+inf_float *single(int num)
+{
+    inf_float *num_1 = (inf_float *)malloc(sizeof(inf_float));
+    init(num_1);
+    append(num_1, num < 0 ? -num : num);
+    num_1->exp = 9;
+    num_1->sign = num < 0 ? -1 : 1;
+    return num_1;
+}
+void cut_tail(inf_float *a, size_t n){
+    if(a==NULL || a->size == 0){
+        return;
+    }
+    if(n >= a->size){
+        destroy(a);
+        init(a);
+        return;
+    }
+    node *tail = getLocation(a, n);
+    a->size = n;
+    node *temp = tail->next;
+    tail->next = NULL;
+    while (temp)
+    {
+        node *next = temp->next;
+        free(temp);
+        temp = next;
+    }
+}
 
+
+inf_float* PI(size_t precise,size_t step,size_t iteration){
+    // https://www.zhihu.com/question/312520105
+    inf_float *result = (inf_float *)malloc(sizeof(inf_float));
+    init(result);
+    inf_float *num_1=(inf_float*)malloc(sizeof(inf_float));
+    init(num_1);
+    LoadFromString(num_1,"1");
+    inf_float *num_2 = (inf_float *)malloc(sizeof(inf_float));
+    init(num_2);
+    LoadFromString(num_2, "2");
+    inf_float *num_3=(inf_float*)malloc(sizeof(inf_float));
+    init(num_3);
+    LoadFromString(num_3, "3");
+    inf_float *a0 = divide(num_1, num_3, precise);
+    inf_float *r0_0 = sqr_root(num_3, precise, step);
+    inf_float *r0_1 = substract(r0_0, num_1);
+    inf_float *r0 = divide(r0_1, num_2, precise);
+    inf_float *s0_0 = pow3(r0);
+    inf_float *s0_1 = substract(num_1, s0_0);
+    inf_float *s0 = cubic_root(s0_1,precise,step);
+
+    inf_float *t_n, *u_n, *v_n, *w_n, *a_n, *s_n, *r_n;
+    r_n = inf_float_copy(r0);
+    a_n = inf_float_copy(a0);
+    s_n = inf_float_copy(s0);
+    print_float(a_n);
+    print_float(r_n);
+    print_float(s_n);
+    int k = 3;
+    while (iteration--)
+    {
+        inf_float *t_n_0 = multiply_single(r_n, 2);
+        t_n = add_single(t_n_0, 1);
+        inf_float *u_n_0 = pow2(r_n);
+        inf_float *u_n_1 = add_single(u_n_0, 1);
+        inf_float *u_n_2 = add(u_n_1, r_n);
+        inf_float *u_n_3 = multiply(u_n_2, r_n);
+        inf_float *u_n_4 = multiply_single(u_n_3, 9);
+        u_n = cubic_root(u_n_4, precise, step);
+        destroy(u_n_0);
+        destroy(u_n_1);
+        destroy(u_n_2);
+        destroy(u_n_3);
+        destroy(u_n_4);
+
+        inf_float *v_n_0 = pow2(t_n);
+        inf_float *v_n_1 = pow2(u_n);
+        inf_float *v_n_2 = multiply(t_n, u_n);
+        inf_float *v_n_3 = add(v_n_0, v_n_1);
+        v_n = add(v_n_3, v_n_2);
+        destroy(v_n_0);
+        destroy(v_n_1);
+        destroy(v_n_2);
+        destroy(v_n_3);
+
+        inf_float *w_n_0 = pow2(s_n);
+        inf_float *w_n_1 = add(w_n_0, s_n);
+        inf_float *w_n_2 = add_single(w_n_1, 1);
+        inf_float *w_n_3 = multiply_single(w_n_2, 27);
+        w_n = divide(w_n_3, v_n, precise);
+        destroy(w_n_0);
+        destroy(w_n_1);
+        destroy(w_n_2);
+        destroy(w_n_3);
+
+        inf_float *a_n_0 = multiply(w_n, a_n);
+        inf_float *a_n_1 = substract_single_1(w_n, 1);
+        inf_float *a_n_2 = multiply_single(a_n_1, k);
+        inf_float *a_n_3 = add(a_n_0, a_n_2);
+        destroy(a_n);
+        a_n = a_n_3;
+        destroy(a_n_1);
+        destroy(a_n_2);
+        destroy(a_n_0);
+
+        inf_float *s_n_0 = substract_single_1(r_n, 1);
+        inf_float *s_n_1 = pow3(s_n_0);
+        inf_float *s_n_2 = multiply_single(u_n, 2);
+        inf_float *s_n_3 = add(t_n, s_n_2);
+        inf_float *s_n_4 = multiply(s_n_3, v_n);
+        inf_float *s_n_5 = divide(s_n_1, s_n_4, precise);
+        destroy(s_n);
+        s_n = s_n_5;
+        destroy(s_n_0);
+        destroy(s_n_1);
+        destroy(s_n_2);
+        destroy(s_n_3);
+        destroy(s_n_4);
+
+        inf_float *r_n_0 = pow3(s_n);
+        inf_float *r_n_1 = substract_single_1(r_n_0, 1);
+        inf_float *r_n_2 = cubic_root(r_n_1, precise, step);
+        destroy(r_n);
+        r_n = r_n_2;
+        destroy(r_n_0);
+        destroy(r_n_1);
+
+        destroy(t_n);
+        destroy(u_n);
+        destroy(v_n);
+        destroy(w_n);
+
+        k *= 9;
+        cut_tail(a_n, precise);
+        cut_tail(r_n, precise);
+        cut_tail(s_n, precise);
+        print_float(a_n);
+        print_float(r_n);
+        print_float(s_n);
+    }
+    print_float(a_n);
+    print_float(r_n);
+    print_float(s_n);
+    destroy(a_n);
+    destroy(r_n);
+    destroy(s_n);
+}
+
+inf_float *PI_2(size_t precise, size_t iteration)
+{
+    inf_float *result = single(4);
+    inf_float *num_2 = single(2);
+    while (iteration-- > 1)
+    {
+        inf_float *num_k = single(iteration);
+        inf_float *num_2k_1 = single(2 * iteration + 1);
+        inf_float *t1 = divide(num_k, num_2k_1, precise);
+        inf_float *t2 = multiply(result, t1);
+        inf_float *t3 = add(t2, num_2);
+        destroy(result);
+        result = t3;
+        printf("%d\n", iteration);
+        destroy(t1);
+        destroy(t2);
+        destroy(num_k);
+        destroy(num_2k_1);
+        cut_tail(result, precise);
+        quickNormalizeSelf(result);
+    }
+    destroy(num_2);
+    return result;
 
 }
 
@@ -762,6 +973,7 @@ inf_float* cubic_root(inf_float* a, size_t precise, size_t step){
         destroy(A);
         destroy(B);
         destroy(C);
+        cut_tail(result, precise);
     }
     destroy(tri);
     return result;
@@ -787,13 +999,21 @@ inf_float* sqr_root(inf_float* a, size_t precise, size_t step){
         destroy(A);
         destroy(B);
         destroy(C);
+        cut_tail(result, precise);
     }
     destroy(bi);
     return result;
 }
 
 void main(){
+    inf_float *pi =  PI_2(20, 50);
+    print_float(pi);
+    return;
+
     //test inf_float
+
+
+
     inf_float a, b;
     init(&a);
     init(&b);

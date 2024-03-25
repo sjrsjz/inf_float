@@ -40,7 +40,11 @@ inf_float* substract(inf_float *, inf_float *);
 inf_float* substractN(inf_float *, inf_float *);
 inf_float* multiply(inf_float *, inf_float *);
 inf_float* multiply_int(inf_float *, unsigned int);
-inf_float* divide(inf_float *, inf_float *);
+inf_float* divide(inf_float *, inf_float *, size_t);
+inf_float* arcsin(inf_float *, size_t);
+inf_float* PI(size_t);
+inf_float* cubic_root(inf_float *, size_t, size_t);
+inf_float* sqr_root(inf_float *, size_t, size_t);
 
 void init(inf_float *a){
     a->head = NULL;
@@ -170,12 +174,13 @@ void insert_head(inf_float *a, unsigned int data)
 inf_float* inf_float_copy(inf_float *a){
     inf_float *result = (inf_float *)malloc(sizeof(inf_float));
     init(result);
-    for (intptr_t i = (intptr_t)a->size - 1; i >= 0; i--)
+    for (size_t i = 0; i < a->size; i++)
     {
         node *A = getLocation(a, i);
         append(result, A->data);
     }
     result->sign = a->sign;
+    result->exp = a->exp;
     return result;
 }
 
@@ -197,6 +202,8 @@ void quickRShift10(inf_float *a, size_t k){
     a->exp = exp;
 }
 void quickNormalizeSelf(inf_float *a){
+    if(a && a->head && a->head->data>99999999)
+        return;
     size_t bufSize = 9 * a->size + 1;
     int sign = a->sign;
     char *buf = malloc(bufSize);
@@ -368,6 +375,13 @@ inf_float *multiply_int(inf_float *a, unsigned int b)
 inf_float* multiply(inf_float *a, inf_float *b){
     inf_float *result = (inf_float *)malloc(sizeof(inf_float));
     init(result);
+    if(a->size == 0 || b->size == 0){
+        return result;
+    }
+    if (a->size == 1 && a->head && a->head->data == 0 || b->size == 1 && b->head && b->head->data == 0)
+    {
+        return result;
+    }
     size_t k = 0;
     size_t sumLen = a->size + b->size;
     for (intptr_t i = (intptr_t)b->size - 1; i >= 0; i--)
@@ -400,11 +414,73 @@ inf_float* multiply(inf_float *a, inf_float *b){
     return result;
 }
 
-inf_float* divide(inf_float *a, inf_float *b){
+void print_float(inf_float *a){
+    char str[5000];
+    FloatToString(a, str);
+    printf("%s\n", str);
+}
+
+
+inf_float* divide(inf_float *a_, inf_float *b_, size_t precision){
     //now consider a and b are INT
     inf_float *result = (inf_float *)malloc(sizeof(inf_float));
     init(result);
-    
+    //使用二分法
+    inf_float *a = inf_float_copy(a_);
+    inf_float *b = inf_float_copy(b_);
+    int sign = a_->sign * b_->sign;
+
+    quickNormalizeSelf(a);
+    quickNormalizeSelf(b);
+    int exp = a->exp - b->exp;
+    result->exp = 0;
+    int cmp = compareN(a, b);
+    if (cmp > 0)
+    {
+        insert_head(a, 0);
+        exp+=9;
+    }
+    //print_float(a);
+    //print_float(b);
+    for (size_t i = 0; cmp && i < precision; i++)
+    {
+        int L = 999999999+1;
+        int R = 0;
+        append(result, 0);
+        node* curr = getLocation(result, result->size - 1);
+        int M = 0;
+        while (L > R)
+        {
+            M = (L + R) / 2;
+            curr->data = M;
+            if(M==R) break;
+            //printf("M = %d L = %d R = %d\n", M, L, R);
+            //print_float(result);
+            inf_float *temp = multiply(b, result);
+            //print_float(temp);
+            int cmp = compareN(temp, a);
+            if(cmp == 0){
+                goto label;
+            }
+            else if(cmp <= 0){
+                R = M;
+            }
+            else{
+                L = M;
+            }
+            destroy(temp);
+        }
+    }
+    if(!cmp){
+        append(result, 100000000);
+        exp++;
+    }
+    label:
+    destroy(a);
+    destroy(b);
+    result->sign = sign;
+    result->exp = exp; 
+    return result;
 }
 
 void LoadFromStringN(inf_float *a, char *buf)
@@ -519,7 +595,8 @@ void LoadFromString(inf_float* a, char* buf){
 }
 
 int compareN(inf_float *a, inf_float *b){
-    for (intptr_t i = 0; i < a->size; i--)
+    size_t size = a->size > b->size ? a->size : b->size;
+    for (size_t i = 0; i < size; i++)
     {
         node *A = getLocation(a, i);
         node *B = getLocation(b, i);
@@ -578,6 +655,7 @@ void FloatToStringN(inf_float *a, char *buf)
 {
     unsigned int N = a->size;
     unsigned int M = a->size * 9;
+    size_t offset = 0;
     for (int i = 0; i < N; i++)
     {
         node *A = getLocation(a, i);
@@ -585,7 +663,7 @@ void FloatToStringN(inf_float *a, char *buf)
         unsigned int E = 1e8;
         for (unsigned int j = 0; j < 9; j++)
         {
-            buf[i * 9 + j ] = num / E + '0';
+            buf[offset++] = num / E + '0';
             num %= E;
             E /= 10;
         }
@@ -598,11 +676,11 @@ void FloatToStringN(inf_float *a, char *buf)
     unsigned int E = 1e8;
     for (unsigned int i = 0; i < M % 9; i++)
     {
-        buf[N * 9 + i] = num / E + '0';
+        buf[offset++] = num / E + '0';
         num %= E;
         E /= 10;
     }
-    buf[M] = '\0';
+    buf[offset++] = '\0';
 }
 void FloatToString(inf_float *a, char* buf){
     unsigned int N = a->size;
@@ -613,38 +691,106 @@ void FloatToString(inf_float *a, char* buf){
         buf[0] = '-';
         offset = 1;
     }
-    buf[offset] = '0';
-    offset++;
-    buf[offset] = '.';
-    offset++;
+    buf[offset++] = '0';
+    buf[offset++] = '.';
     for(int i=0;i<N;i++){
         node *A = getLocation(a, i);
         unsigned int num = A->data;
         unsigned int E = 1e8;
-        for (unsigned int j = 0; j < 9; j++)
+        for (unsigned int j = 0; j < 9 && (i != N - 1 || num); j++)
         {
-            buf[i * 9 + j + offset] = num / E + '0';
+            buf[offset++] = num / E + '0';
             num %= E;
             E /= 10;
         }
     }
-    node *A = getLocation(a, N-1);
-    unsigned int num = A->data;
-    unsigned int E = 1e8;
-    for (unsigned int i = 0; i < M % 9; i++)
+    while (buf[offset - 1] == '0')
     {
-        buf[N * 9 + i + offset] = num / E + '0';
-        num %= E;
-        E /= 10;
+        offset--;
     }
-    if(a->exp){
-        buf[M + offset] = 'e';
-        sprintf(buf + M + 1 + offset, "%d", (int)a->exp);
+    if(offset == 2){
+        buf[1] = '\0';
         return;
     }
-    buf[M] = '\0';
+    if(a->exp){
+        buf[offset++] = 'e';
+        int flag = a->exp;
+        if(a->exp < 0){
+            buf[offset++] = '-';
+            flag = -a->exp;
+        }
+        int k = 1000000000;
+        while (k > flag)
+        {
+            k /= 10;
+        }
+        while (k)
+        {
+            buf[offset++] = flag / k + '0';
+            flag %= k;
+            k /= 10;
+        }
+    }
+    buf[offset] = '\0';
 }
 
+
+inf_float* PI(size_t precise){
+
+
+}
+
+inf_float* cubic_root(inf_float* a, size_t precise, size_t step){
+    inf_float *result = inf_float_copy(a);
+    inf_float *tri = (inf_float *)malloc(sizeof(inf_float));
+    init(tri);
+    LoadFromString(tri, "3");
+    inf_float *temp = NULL;
+    while (step--)
+    {
+        inf_float* sqr = multiply(result, result);
+        inf_float* triple = multiply(sqr, result);
+        inf_float *A = substract(triple, a);
+        inf_float *B = multiply(tri, sqr);
+        inf_float *C = divide(A, B, precise);
+        quickNormalizeSelf(C);
+        temp = substract(result, C);
+        destroy(result);
+        result = temp;
+        destroy(sqr);
+        destroy(triple);
+        destroy(A);
+        destroy(B);
+        destroy(C);
+    }
+    destroy(tri);
+    return result;
+}
+
+inf_float* sqr_root(inf_float* a, size_t precise, size_t step){
+    inf_float *result = inf_float_copy(a);
+    inf_float *bi = (inf_float *)malloc(sizeof(inf_float));
+    init(bi);
+    LoadFromString(bi, "2");
+    inf_float *temp = NULL;
+    while (step--)
+    {
+        inf_float* sqr = multiply(result, result);
+        inf_float *A = substract(sqr, a);
+        inf_float *B = multiply(bi, result);
+        inf_float *C = divide(A, B, precise);
+        quickNormalizeSelf(C);
+        temp = substract(result, C);
+        destroy(result);
+        result = temp;
+        destroy(sqr);
+        destroy(A);
+        destroy(B);
+        destroy(C);
+    }
+    destroy(bi);
+    return result;
+}
 
 void main(){
     //test inf_float
@@ -682,10 +828,20 @@ void main(){
     FloatToString(result, str);
     printf("Mul \t\t\t%s\n", str);
     destroy(result);
-    result = divide(&a, &b);
+    result = divide(&a, &b,4);
     quickNormalizeSelf(result);
     FloatToString(result, str);
     printf("Div \t\t\t%s\n", str);
+    destroy(result);
+    result = cubic_root(&a, 4, 10);
+    quickNormalizeSelf(result);
+    FloatToString(result, str);
+    printf("Cubic root \t\t%s\n", str);
+    destroy(result);
+    result = sqr_root(&a, 4, 10);
+    quickNormalizeSelf(result);
+    FloatToString(result, str);
+    printf("Sqr root \t\t%s\n", str);
     destroy(result);
 
     destroy(&a);
